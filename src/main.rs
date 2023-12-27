@@ -1,4 +1,3 @@
-
 use std::net::UdpSocket;
 
 fn main() -> std::io::Result<()> {
@@ -39,8 +38,15 @@ impl DnsMessage {
     // fn encode(&self) -> [u8;12] {
     fn encode(&self) -> Vec<u8> {
         let mut encoded_message: Vec<u8> = vec![];
+
+        // header
         let header_bytes = self.header.encode();
         encoded_message.extend(&header_bytes[..]);
+
+        // question
+        let question_bytes = self.question.encode();
+
+        encoded_message.extend(question_bytes);
 
         encoded_message
     }
@@ -49,6 +55,7 @@ impl DnsMessage {
 
 #[derive(Debug)]
 struct Question {
+    name: String,
     r#type: u16,
     class: u16
 
@@ -57,10 +64,37 @@ struct Question {
 impl Question {
     fn new() -> Self {
         Self {
+            name: String::from("codecrafters.io"),
             r#type: 1,
-            class: 12
+            class: 1
         }
+    }
+    fn encode(&self) -> Vec<u8> {
+        let mut bytes: Vec<u8> = vec![];
 
+        let domain_name: &Vec<&str> = &self.name
+            .split(".")
+            .take(2)
+            .collect::<Vec<&str>>();
+
+        // name
+        let name_length_byte : u8 = domain_name[0].len().try_into().unwrap();
+        bytes.push(name_length_byte);
+        bytes.extend(domain_name[0].as_bytes());
+
+        // domain
+        let domain_length_byte : u8 = domain_name[1].len().try_into().unwrap();
+        bytes.push(domain_length_byte);
+        bytes.extend(domain_name[1].as_bytes());
+
+        let labels_end_byte: u8 = 0;
+        bytes.push(labels_end_byte);
+        let rtype = &self.r#type.to_be_bytes();
+        let class = &self.class.to_be_bytes();
+        bytes.extend_from_slice(rtype);
+        bytes.extend_from_slice(class);
+
+        bytes
     }
 }
 
@@ -93,7 +127,7 @@ impl Header {
             ra: false,
             z: 0,
             rcode: 0,
-            qdcount: 0,
+            qdcount: 1,
             ancount:0,
             nscount:0,
             arcount:0 
