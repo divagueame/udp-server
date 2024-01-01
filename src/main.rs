@@ -14,7 +14,7 @@ fn main() -> std::io::Result<()> {
                 socket
                     .send_to(&message.encode(), source)
                     .expect("Failed sending the message");
-            },
+            }
             Err(e) => {
                 println!("No!, {}", e);
                 break Err(e);
@@ -26,13 +26,17 @@ fn main() -> std::io::Result<()> {
 #[derive(Debug)]
 struct DnsMessage {
     header: Header,
-    question: Question
+    question: Question,
+    answer: Answer,
 }
+
 impl DnsMessage {
     fn new() -> Self {
+        let new_question = Question::new();
         Self {
             header: Header::new(),
-            question: Question::new()
+            answer: Answer::new(&new_question),
+            question: new_question,
         }
     }
     // fn encode(&self) -> [u8;12] {
@@ -45,20 +49,84 @@ impl DnsMessage {
 
         // question
         let question_bytes = self.question.encode();
-
         encoded_message.extend(question_bytes);
+
+        // answer
+        let answer_bytes = self.answer.encode();
+        encoded_message.extend(answer_bytes);
 
         encoded_message
     }
+}
 
+
+#[derive(Debug)]
+struct Answer {
+    name: String,
+    r#type: u16,
+    class: u16,
+    ttl: u32,
+    length: u16,
+    data: [u8; 4]
+}
+
+impl Answer {
+   fn new(question: &Question) -> Self {
+        Self {
+            name: question.name.to_owned(),
+            r#type: 1,
+            class: 1,
+            ttl: 60,
+            length: 4,
+            data: [8,8,8,8]
+        }
+    }
+    fn encode(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+
+        let domain_name: &Vec<&str> = &self.name.split(".").take(2).collect::<Vec<&str>>();
+
+        // name
+        let name_length_byte: u8 = domain_name[0].len().try_into().unwrap();
+        bytes.push(name_length_byte);
+        bytes.extend(domain_name[0].as_bytes());
+
+        // domain
+        let domain_length_byte: u8 = domain_name[1].len().try_into().unwrap();
+        bytes.push(domain_length_byte);
+        bytes.extend(domain_name[1].as_bytes());
+
+        let labels_end_byte: u8 = 0;
+        bytes.push(labels_end_byte);
+
+        // type
+        let type_bytes = &self.r#type.to_be_bytes();
+        bytes.extend(type_bytes);
+        
+        // class
+        let class_bytes = &self.class.to_be_bytes();
+        bytes.extend(class_bytes);
+
+        // ttl
+        let ttl_bytes = &self.ttl.to_be_bytes();
+        bytes.extend(ttl_bytes);
+
+        // length
+        let length_bytes = &self.length.to_be_bytes();
+        bytes.extend(length_bytes);
+      
+        // data
+        bytes.extend(&self.data);
+
+        bytes
+    }
 }
 
 #[derive(Debug)]
 struct Question {
     name: String,
     r#type: u16,
-    class: u16
-
+    class: u16,
 }
 
 impl Question {
@@ -66,24 +134,21 @@ impl Question {
         Self {
             name: String::from("codecrafters.io"),
             r#type: 1,
-            class: 1
+            class: 1,
         }
     }
     fn encode(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = vec![];
 
-        let domain_name: &Vec<&str> = &self.name
-            .split(".")
-            .take(2)
-            .collect::<Vec<&str>>();
+        let domain_name: &Vec<&str> = &self.name.split(".").take(2).collect::<Vec<&str>>();
 
         // name
-        let name_length_byte : u8 = domain_name[0].len().try_into().unwrap();
+        let name_length_byte: u8 = domain_name[0].len().try_into().unwrap();
         bytes.push(name_length_byte);
         bytes.extend(domain_name[0].as_bytes());
 
         // domain
-        let domain_length_byte : u8 = domain_name[1].len().try_into().unwrap();
+        let domain_length_byte: u8 = domain_name[1].len().try_into().unwrap();
         bytes.push(domain_length_byte);
         bytes.extend(domain_name[1].as_bytes());
 
@@ -112,7 +177,7 @@ struct Header {
     qdcount: u16,
     ancount: u16,
     nscount: u16,
-    arcount: u16
+    arcount: u16,
 }
 
 impl Header {
@@ -128,20 +193,20 @@ impl Header {
             z: 0,
             rcode: 0,
             qdcount: 1,
-            ancount:0,
-            nscount:0,
-            arcount:0 
+            ancount: 1,
+            nscount: 0,
+            arcount: 0,
         }
     }
-    fn encode(&self) -> [u8;12] {
+    fn encode(&self) -> [u8; 12] {
         let id = &self.id.to_be_bytes();
         let qdcount = &self.qdcount.to_be_bytes();
         let ancount = &self.ancount.to_be_bytes();
         let nscount = &self.nscount.to_be_bytes();
         let arcount = &self.arcount.to_be_bytes();
-        let mut bytes: [u8;12] = [0b0000_000; 12];
+        let mut bytes: [u8; 12] = [0b0000_000; 12];
 
-        bytes[0] = id[0]; 
+        bytes[0] = id[0];
         bytes[1] = id[1];
 
         let mut byte2: u8 = 0b0000_0000;
@@ -159,14 +224,13 @@ impl Header {
         bytes[3] = byte3;
 
         bytes[4] = qdcount[0];
-        bytes[5] =  qdcount[1];
-        bytes[6] =  ancount[0];
-        bytes[7] =  ancount[1];
-        bytes[8] =  nscount[0];
+        bytes[5] = qdcount[1];
+        bytes[6] = ancount[0];
+        bytes[7] = ancount[1];
+        bytes[8] = nscount[0];
         bytes[9] = nscount[1];
         bytes[10] = arcount[0];
         bytes[11] = arcount[1];
         bytes
     }
 }
-
